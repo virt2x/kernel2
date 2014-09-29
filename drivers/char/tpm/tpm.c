@@ -1576,6 +1576,202 @@ out_free:
 }
 EXPORT_SYMBOL_GPL(tpm_register_hardware);
 
+/*TPM 2.0*/
+#define TPM_ST_NO_SESSIONS  cpu_to_be16(0x8001)
+#define TPM2_CC_GETCAP  cpu_to_be32(0x0000017a)
+#define TPM2_CC_GETCAP_SIZE cpu_to_be32(0x00000016)
+#define TPM2_RESULTGETCAP_SIZE  cpu_to_be32(0x00000200)
+
+static struct tpm_input_header tpm2_getcap_header = {
+    .tag = TPM_ST_NO_SESSIONS,
+    .length = TPM2_CC_GETCAP_SIZE,
+    .ordinal = TPM2_CC_GETCAP,
+};
+
+static ssize_t tpm2_cap_properties(struct device * dev, __be32 cap_id,
+             __be32 property , tpm2_cap_t *cap)
+{
+    struct tpm_cmd_t cmd;
+    struct tpm_chip *chip = dev_get_drvdata(dev);
+    ssize_t rc;
+
+    cmd.header.in = tpm2_getcap_header;
+    cmd.params.tpm2getcap_in.tpm_cap = cap_id;
+    cmd.params.tpm2getcap_in.property = property;
+    cmd.params.tpm2getcap_in.property_count = cpu_to_be32(0x00000001);
+    rc = transmit_cmd(chip, &cmd, TPM2_RESULTGETCAP_SIZE,
+                "TPM2_CAP  ..");
+    if (!rc && cmd.params.tpm2getcap_out.more_data )
+        memcpy(cap, &cmd.params.tpm2getcap_out.cap,
+                sizeof(tpm2_cap_t));
+    return rc;
+}
+
+#define TPM2_CC_READPCR cpu_to_be32(0x0000017e)
+#define TPM2_CC_READPCR_SIZE cpu_to_be32(0x00000014)
+#define SHA1_ALG_ID cpu_to_be16(0x0004)
+#define PCR_SELECT_NUM(x) (u8)(x/8)
+#define PCR_SELECT_VALUE(x) (u8)(0x1)<<(x%8)
+
+static struct tpm_input_header tpm2_pcr_header = {
+    .tag = TPM_ST_NO_SESSIONS,
+    .length = TPM2_CC_READPCR_SIZE,
+    .ordinal = TPM2_CC_READPCR,
+};
+
+static ssize_t __tpm2_pcr_read(struct device * dev, int pcr_idx,
+             u8* buf)
+{
+    ssize_t rc;
+    struct tpm_cmd_t cmd;
+    struct tpm_chip *chip = dev_get_drvdata(dev);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.header.in = tpm2_pcr_header;
+    cmd.params.tpm2pcr_in.tpml_pcr_slct.count = cpu_to_be32(0x1);
+    cmd.params.tpm2pcr_in.tpml_pcr_slct.tpms_pcr_slct.hash = SHA1_ALG_ID;
+    cmd.params.tpm2pcr_in.tpml_pcr_slct.tpms_pcr_slct.size_slct = PCR_SELECT_MAX;
+    cmd.params.tpm2pcr_in.tpml_pcr_slct.tpms_pcr_slct.pcr_slct[PCR_SELECT_NUM(pcr_idx)] =
+        PCR_SELECT_VALUE(pcr_idx);
+    rc = transmit_cmd(chip, &cmd, TPM2_CC_READPCR_SIZE,
+                "TPM2_READPCR  ..");
+    memcpy(buf, cmd.params.tpm2pcr_out.pcr_values.digests[0].sha1.buffer,
+            SHA1_DIGEST_SIZE);
+
+    return rc;
+}
+
+ssize_t tpm2_show_ownerauth(struct device * dev, struct device_attribute * attr,
+            char *buf)
+{
+    ssize_t rc;
+    tpm2_cap_t cap;
+    __be32 pram = 0;
+
+    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+                TPM_PT_PERMANENT, &cap);
+    pram = cap.tpm2_properties.tpm2_property[0].value;
+    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+                & OWNER_AUTH_BIT) ? 1 : 0);
+    return rc;
+}
+EXPORT_SYMBOL_GPL(tpm2_show_ownerauth);
+
+ssize_t tpm2_show_endorseauth(struct device * dev, struct device_attribute * attr,
+            char *buf)
+{
+    ssize_t rc;
+    tpm2_cap_t cap;
+    __be32 pram = 0;
+
+    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+                TPM_PT_PERMANENT, &cap);
+    pram = cap.tpm2_properties.tpm2_property[0].value;
+    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+                & ENDORSEMENT_AUTH_BIT) ? 1 : 0);
+    return rc;
+}
+EXPORT_SYMBOL_GPL(tpm2_show_endorseauth);
+
+ssize_t tpm2_show_phenable(struct device * dev, struct device_attribute * attr,
+            char *buf)
+{
+    ssize_t rc;
+    tpm2_cap_t cap;
+    __be32 pram = 0;
+
+    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+                TPM_PT_STARTUP_CLEAR, &cap);
+    pram = cap.tpm2_properties.tpm2_property[0].value;
+    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+                & PH_ENABLE_BIT) ? 1 : 0);
+    return rc;
+}
+EXPORT_SYMBOL_GPL(tpm2_show_phenable);
+
+ssize_t tpm2_show_shenable(struct device * dev, struct device_attribute * attr,
+            char *buf)
+{
+    ssize_t rc;
+    tpm2_cap_t cap;
+    __be32 pram = 0;
+
+    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+                TPM_PT_STARTUP_CLEAR, &cap);
+    pram = cap.tpm2_properties.tpm2_property[0].value;
+    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+                & SH_ENABLE_BIT) ? 1 : 0);
+    return rc;
+}
+EXPORT_SYMBOL_GPL(tpm2_show_shenable);
+
+ssize_t tpm2_show_ehenable(struct device * dev, struct device_attribute * attr,
+            char *buf)
+{
+    ssize_t rc;
+    tpm2_cap_t cap;
+    __be32 pram = 0;
+
+    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+                TPM_PT_STARTUP_CLEAR, &cap);
+    pram = cap.tpm2_properties.tpm2_property[0].value;
+    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+                & EH_ENABLE_BIT) ? 1 : 0);
+    return rc;
+}
+EXPORT_SYMBOL_GPL(tpm2_show_ehenable);
+
+ssize_t tpm2_show_pcrs(struct device * dev, struct device_attribute * attr,
+            char *buf)
+{
+    ssize_t rc;
+    tpm2_cap_t cap;
+    __be32 max_pcr;
+    u8 i, j;
+    u8 digest[SHA1_DIGEST_SIZE];
+    char *str = buf;
+
+    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+                TPM_PT_PCR_COUNT, &cap);
+    max_pcr = cap.tpm2_properties.tpm2_property[0].value;
+    if (be32_to_cpu(max_pcr) != IMPLEMENTATION_PCR)
+        return -1;
+
+    for(i =0; i< be32_to_cpu(max_pcr); i++) {
+        rc = __tpm2_pcr_read(dev, i, digest);
+        if (rc < 0)
+            break;
+        str += sprintf(str, "PCR-%02u :", i);
+        for(j = 0; j < SHA1_DIGEST_SIZE; j++)
+            str += sprintf(str, "%02x ", digest[j]);
+        str += sprintf(str, "\n");
+    }
+
+    return str - buf;
+}
+EXPORT_SYMBOL_GPL(tpm2_show_pcrs);
+
+#define TPM2_CC_SELFTEST	cpu_to_be32(0x00000143)
+#define TPM2_CC_SELFTEST_SIZE	cpu_to_be32(0x0000000b)
+
+static struct tpm_input_header tpm2_selftest_header = {
+    .tag = TPM_ST_NO_SESSIONS,
+    .length = TPM2_CC_SELFTEST_SIZE,
+    .ordinal = TPM2_CC_SELFTEST,
+};
+
+int tpm2_do_selftest(struct tpm_chip *chip)
+{
+    int rc;
+    struct tpm_cmd_t cmd;
+    cmd.header.in = tpm2_selftest_header;
+    cmd.params.tpm2selftest_in.fulltest_type = (u8)(0x1);
+    rc = transmit_cmd(chip, &cmd, TPM2_CC_SELFTEST_SIZE,
+                "TPM2 selftest ..");
+    return rc;
+}
+EXPORT_SYMBOL_GPL(tpm2_do_selftest);
+
 MODULE_AUTHOR("Leendert van Doorn (leendert@watson.ibm.com)");
 MODULE_DESCRIPTION("TPM Driver");
 MODULE_VERSION("2.0");

@@ -75,6 +75,18 @@ extern ssize_t tpm_show_durations(struct device *,
 				  struct device_attribute *attr, char *);
 extern ssize_t tpm_show_timeouts(struct device *,
 				 struct device_attribute *attr, char *);
+extern ssize_t tpm2_show_ownerauth(struct device *, struct device_attribute *attr,
+                char *);
+extern ssize_t tpm2_show_endorseauth(struct device *, struct device_attribute *attr,
+                char *);
+extern ssize_t tpm2_show_phenable(struct device *, struct device_attribute *attr,
+                char *);
+extern ssize_t tpm2_show_shenable(struct device *, struct device_attribute *attr,
+                char *);
+extern ssize_t tpm2_show_ehenable(struct device *, struct device_attribute *attr,
+                char *);
+extern ssize_t tpm2_show_pcrs(struct device *, struct device_attribute *attr,
+                char *);
 
 struct tpm_chip;
 
@@ -305,6 +317,112 @@ struct tpm_startup_in {
 	__be16	startup_type;
 } __packed;
 
+struct tpm2_selftest_in {
+    u8 fulltest_type;
+} __packed;
+
+#define    TPM_CAP_FIRST               cpu_to_be32(0x00000000)
+#define    TPM_CAP_ALGS                cpu_to_be32(0x00000000)
+#define    TPM_CAP_HANDLES             cpu_to_be32(0x00000001)
+#define    TPM_CAP_COMMANDS            cpu_to_be32(0x00000002)
+#define    TPM_CAP_PP_COMMANDS         cpu_to_be32(0x00000003)
+#define    TPM_CAP_AUDIT_COMMANDS      cpu_to_be32(0x00000004)
+#define    TPM_CAP_PCRS                cpu_to_be32(0x00000005)
+#define    TPM_CAP_TPM_PROPERTIES      cpu_to_be32(0x00000006)
+#define    TPM_CAP_PCR_PROPERTIES      cpu_to_be32(0x00000007)
+#define    TPM_CAP_ECC_CURVES          cpu_to_be32(0x00000008)
+#define    TPM_CAP_LAST                cpu_to_be32(0x00000008)
+#define    TPM_CAP_VENDOR_PROPERTY     cpu_to_be32(0x00000100)
+#define    MAX_CAP_BUFFER              (u32)(1000)
+#define    MAX_TPM_PROPERTIES          (MAX_CAP_BUFFER/16)
+
+#define    TPM_PT_NONE                 cpu_to_be32(0x00000000)
+#define    PT_GROUP                    cpu_to_be32(0x00000100)
+#define    PT_FIXED                    cpu_to_be32(PT_GROUP * 1)
+#define    PT_VAR                      cpu_to_be32(PT_GROUP * 2)
+#define    TPM_PT_PERMANENT            cpu_to_be32(PT_VAR + 0)
+#define    TPM_PT_STARTUP_CLEAR        cpu_to_be32(PT_VAR + 1)
+#define    TPM_PT_PCR_COUNT            cpu_to_be32(PT_FIXED + 18)
+#define    PH_ENABLE_BIT               (u32)(0x1)
+#define    SH_ENABLE_BIT               (u32)(0x2)
+#define    EH_ENABLE_BIT               (u32)(0x4)
+#define    OWNER_AUTH_BIT              (u32)(0x1)
+#define    ENDORSEMENT_AUTH_BIT        (u32)(0x2)
+
+struct tpms_gatged_prop {
+    __be32  property;
+    __be32  value;
+} __packed;
+
+struct tpml_tagged_prop {
+    __be32                    count;
+    struct tpms_gatged_prop   tpm2_property[MAX_TPM_PROPERTIES];
+} __packed;
+
+typedef union {
+    struct tpml_tagged_prop  tpm2_properties;
+} tpm2_cap_t;
+
+struct tpm2_getcap_in {
+    __be32 tpm_cap;
+    __be32 property;
+    __be32 property_count;
+} __packed;
+
+struct tpm2_getcap_out {
+    u8         more_data;
+    __be32     capability;
+    tpm2_cap_t cap;
+} __packed;
+
+#define    IMPLEMENTATION_PCR           (u32)(24)
+#define    PLATFORM_PCR                 (u32)(24)
+#define    PCR_SELECT_MIN               (u32)(3)
+#define    PCR_SELECT_MAX               (u32)(3)
+#define    SHA1_DIGEST_SIZE             (u32)(20)
+#define    SHA256_DIGEST_SIZE           (u32)(32)
+#define    SHA384_DIGEST_SIZE           (u32)(48)
+#define    SHA512_DIGEST_SIZE           (u32)(64)
+#define    WHIRLPOOL512_DIGEST_SIZE     (u32)(64)
+#define    SM3_256_DIGEST_SIZE          (u32)(32)
+#define    DIGEST_SIZE_MAX              (u32)(64)
+#define    HASH_COUNT                   (u32)(3)
+
+struct digest_2b_t {
+    __be16  size;
+    u8  buffer[DIGEST_SIZE_MAX];
+} __packed;
+
+typedef union {
+    struct digest_2b_t  sha1;
+} tpm2b_digest_t;
+
+struct tpml_digest_t {
+    __be32  count;
+    tpm2b_digest_t  digests[8];
+} __packed;
+
+struct tpms_pcr_selection_t {
+    __be16  hash;
+    u8  size_slct;
+    u8  pcr_slct[PCR_SELECT_MAX];
+} __packed;
+
+struct tpml_pcr_selection_t {
+    __be32  count;
+    struct tpms_pcr_selection_t tpms_pcr_slct;
+} __packed;
+
+struct tpm2_pcr_in {
+    struct tpml_pcr_selection_t tpml_pcr_slct;
+}__packed;
+
+struct tpm2_pcr_out {
+    __be32  pcr_update_count;
+    struct tpml_pcr_selection_t tpml_pcr_slct;
+    struct tpml_digest_t pcr_values;
+}__packed;
+
 typedef union {
 	struct	tpm_getcap_params_out getcap_out;
 	struct	tpm_readpubek_params_out readpubek_out;
@@ -316,6 +434,11 @@ typedef union {
 	struct	tpm_getrandom_in getrandom_in;
 	struct	tpm_getrandom_out getrandom_out;
 	struct tpm_startup_in startup_in;
+    struct  tpm2_selftest_in tpm2selftest_in;
+    struct  tpm2_getcap_in tpm2getcap_in;
+    struct  tpm2_getcap_out tpm2getcap_out;
+    struct  tpm2_pcr_in tpm2pcr_in;
+    struct  tpm2_pcr_out tpm2pcr_out;
 } tpm_cmd_params;
 
 struct tpm_cmd_t {
@@ -342,6 +465,7 @@ extern int tpm_pm_suspend(struct device *);
 extern int tpm_pm_resume(struct device *);
 extern int wait_for_tpm_stat(struct tpm_chip *, u8, unsigned long,
 			     wait_queue_head_t *, bool);
+extern int tpm2_do_selftest(struct tpm_chip *);
 
 #ifdef CONFIG_ACPI
 extern int tpm_add_ppi(struct kobject *);

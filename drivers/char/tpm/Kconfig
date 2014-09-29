@@ -91,4 +91,13 @@ config TCG_ST33_I2C
         To compile this driver as a module, choose M here; the module will be
         called tpm_stm_st33_i2c.
 
+config TCG_TPM2_TIS
+        tristate "TPM Interface Specification 2.0 Interface"
+        depends on X86
+        ---help---
+        If you have a TPM security chip that is compliant with the
+        TCG TIS 2.0 TPM specification say Yes and it will be accessible
+        from within Linux.  To compile this driver as a module, choose
+        M here; the module will be called tpm2_tis.
+
 endif # TCG_TPM
