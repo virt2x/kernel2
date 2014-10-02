@@ -234,10 +234,6 @@ out:
     return size;
 }
 
-static bool itpm;
-module_param(itpm, bool, 0444);
-MODULE_PARM_DESC(itpm, "Force iTPM workarounds (found on some Lenovo laptops)");
-
 /*
  * If interrupts are used (signaled by an irq set in the vendor structure)
  * tpm.c can skip polling for the data to be available as the interrupt is
@@ -273,7 +269,7 @@ static int tpm2_tis_send_data(struct tpm_chip *chip, u8 *buf, size_t len)
         wait_for_tpm_stat(chip, TPM_STS_VALID, chip->vendor.timeout_c,
                   &chip->vendor.int_queue, false);
         status = tpm2_tis_status(chip);
-        if (!itpm && (status & TPM_STS_DATA_EXPECT) == 0) {
+        if ((status & TPM_STS_DATA_EXPECT) == 0) {
             rc = -EIO;
             goto out_err;
         }

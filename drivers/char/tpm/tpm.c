@@ -1588,7 +1588,7 @@ static struct tpm_input_header tpm2_getcap_header = {
     .ordinal = TPM2_CC_GETCAP,
 };
 
-static ssize_t tpm2_cap_properties(struct device * dev, __be32 cap_id,
+static ssize_t __tpm2_cap(struct device * dev, __be32 cap_id,
              __be32 property , tpm2_cap_t *cap)
 {
     struct tpm_cmd_t cmd;
@@ -1646,12 +1646,13 @@ ssize_t tpm2_show_ownerauth(struct device * dev, struct device_attribute * attr,
 {
     ssize_t rc;
     tpm2_cap_t cap;
-    __be32 pram = 0;
+	struct tpms_gatged_prop *prop;
 
-    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+    rc = __tpm2_cap(dev, TPM_CAP_TPM_PROPERTIES,
                 TPM_PT_PERMANENT, &cap);
-    pram = cap.tpm2_properties.tpm2_property[0].value;
-    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+	if (rc > 0)
+		prop = cap.tpm2_properties.tpm2_property;
+	rc = sprintf(buf, "%d\n", (be32_to_cpu(prop->value)
                 & OWNER_AUTH_BIT) ? 1 : 0);
     return rc;
 }
@@ -1662,12 +1663,13 @@ ssize_t tpm2_show_endorseauth(struct device * dev, struct device_attribute * att
 {
     ssize_t rc;
     tpm2_cap_t cap;
-    __be32 pram = 0;
+    struct tpms_gatged_prop *prop;
 
-    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+    rc = __tpm2_cap(dev, TPM_CAP_TPM_PROPERTIES,
                 TPM_PT_PERMANENT, &cap);
-    pram = cap.tpm2_properties.tpm2_property[0].value;
-    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+    if (rc > 0)
+        prop = cap.tpm2_properties.tpm2_property;
+	rc = sprintf(buf, "%d\n", (be32_to_cpu(prop->value)
                 & ENDORSEMENT_AUTH_BIT) ? 1 : 0);
     return rc;
 }
@@ -1678,12 +1680,13 @@ ssize_t tpm2_show_phenable(struct device * dev, struct device_attribute * attr,
 {
     ssize_t rc;
     tpm2_cap_t cap;
-    __be32 pram = 0;
+    struct tpms_gatged_prop *prop;
 
-    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+    rc = __tpm2_cap(dev, TPM_CAP_TPM_PROPERTIES,
                 TPM_PT_STARTUP_CLEAR, &cap);
-    pram = cap.tpm2_properties.tpm2_property[0].value;
-    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+    if (rc > 0)
+        prop = cap.tpm2_properties.tpm2_property;
+	rc = sprintf(buf, "%d\n", (be32_to_cpu(prop->value)
                 & PH_ENABLE_BIT) ? 1 : 0);
     return rc;
 }
@@ -1694,12 +1697,13 @@ ssize_t tpm2_show_shenable(struct device * dev, struct device_attribute * attr,
 {
     ssize_t rc;
     tpm2_cap_t cap;
-    __be32 pram = 0;
+    struct tpms_gatged_prop *prop;
 
-    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+    rc = __tpm2_cap(dev, TPM_CAP_TPM_PROPERTIES,
                 TPM_PT_STARTUP_CLEAR, &cap);
-    pram = cap.tpm2_properties.tpm2_property[0].value;
-    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+    if (rc > 0)
+        prop = cap.tpm2_properties.tpm2_property;
+	rc = sprintf(buf, "%d\n", (be32_to_cpu(prop->value)
                 & SH_ENABLE_BIT) ? 1 : 0);
     return rc;
 }
@@ -1710,12 +1714,13 @@ ssize_t tpm2_show_ehenable(struct device * dev, struct device_attribute * attr,
 {
     ssize_t rc;
     tpm2_cap_t cap;
-    __be32 pram = 0;
+    struct tpms_gatged_prop *prop;
 
-    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+    rc = __tpm2_cap(dev, TPM_CAP_TPM_PROPERTIES,
                 TPM_PT_STARTUP_CLEAR, &cap);
-    pram = cap.tpm2_properties.tpm2_property[0].value;
-    rc = sprintf(buf, "%d\n", (be32_to_cpu(pram)
+    if (rc > 0)
+        prop = cap.tpm2_properties.tpm2_property;
+    rc = sprintf(buf, "%d\n", (be32_to_cpu(prop->value)
                 & EH_ENABLE_BIT) ? 1 : 0);
     return rc;
 }
@@ -1729,11 +1734,14 @@ ssize_t tpm2_show_pcrs(struct device * dev, struct device_attribute * attr,
     __be32 max_pcr;
     u8 i, j;
     u8 digest[SHA1_DIGEST_SIZE];
+	struct tpms_gatged_prop *prop;
     char *str = buf;
 
-    rc = tpm2_cap_properties(dev, TPM_CAP_TPM_PROPERTIES,
+    rc = __tpm2_cap(dev, TPM_CAP_TPM_PROPERTIES,
                 TPM_PT_PCR_COUNT, &cap);
-    max_pcr = cap.tpm2_properties.tpm2_property[0].value;
+	if (rc > 0)
+        prop = cap.tpm2_properties.tpm2_property;
+    max_pcr = prop->value;
     if (be32_to_cpu(max_pcr) != IMPLEMENTATION_PCR)
         return -1;
 
